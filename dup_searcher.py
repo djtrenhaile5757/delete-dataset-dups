@@ -72,11 +72,7 @@ class DuplicateSearcher:
                                                             # can be safely deleted
                                                             self.delete_duplicate(r)
 
-            empty = False
-            num_dups = len(duplicates)
-            if num_dups < 1:
-                empty = True
-            return duplicates, empty, num_dups
+            return duplicates
 
     def save_duplicate(self, q_im, q_name, r_im, r_name):
         if not os.path.isdir(self.new_dir):

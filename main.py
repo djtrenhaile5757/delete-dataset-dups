@@ -85,7 +85,7 @@ print("[INFO] Beginning histogram image comparison...")
 print("     Auto-Delete: " + str(auto_del))
 print()
 if not auto_del:
-    duplicates, empty, num_dups = searcher.gather_duplicates("save")
+    duplicates = searcher.gather_duplicates("save")
 
     print()
     print()
@@ -101,9 +101,8 @@ if not auto_del:
         input("Continue? [enter]")
     except SyntaxError:
         pass
+    searcher.gather_duplicates("save", duplicates)
 
-    if not empty:
-        searcher.gather_duplicates("save", duplicates)
 else:
     searcher.gather_duplicates("delete")
 
