@@ -21,8 +21,6 @@ def clean_directories():
     save_files = ()
     # gather directory info and delete hidden .DS_Store files
     for dirpath, dirnames, files in os.walk(args["save"]):
-        save_dirs = dirnames
-        save_files = files
         for file in files:
             if file == ".DS_Store":
                 os.remove(os.path.join(dirpath, file))
@@ -47,30 +45,30 @@ def clean_directories():
                         print("[INFO] Deleting .DS_Store file in top directory...")
     print()
 
-    # check that the directory is empty
-    if len(save_dirs) > 0 or len(save_files) > 0:
-        print("[INFO] Designated save directory is not empty.")
-        print("     This could interfere with the saving of duplicates. Please")
-        print("     clear the directory or terminate and designate another")
-        print("     before proceeding.")
-        print()
+    for _, dirnames, files in os.walk(args["save"]):
+        # check that the directory is empty
+        if len(dirnames) > 0 or len(files) > 0:
+            print("[INFO] Designated save directory is not empty.")
+            print("     This could interfere with the saving of duplicates. Please")
+            print("     clear the directory or terminate and designate another")
+            print("     before proceeding.")
+            print()
 
-        print(args["save"])
-        print("contains: ")
-        for _, dirnames, files in os.walk(args["save"]):
+            print(args["save"])
+            print("contains: ")
             for file in files:
                 print("     " + file)
             for dir in dirnames:
                 print()
                 print("     subdir: " + dir)
-                for _, _, files in os.walk(dir):
-                    for file in files:
-                        print("     " + file)
+                for _, _, sub_files in os.walk(dir):
+                    for sub_file in sub_files:
+                        print("     " + sub_file)
 
-        try:
-            input("Continue? [enter]")
-        except SyntaxError:
-            pass
+            try:
+                input("Continue? [enter]")
+            except SyntaxError:
+                pass
 
 
 clean_directories()
@@ -85,7 +83,7 @@ print("[INFO] Beginning histogram image comparison...")
 print("     Auto-Delete: " + str(auto_del))
 print()
 if not auto_del:
-    duplicates = searcher.gather_duplicates("save")
+    duplicates, num_dups = searcher.gather_duplicates("save")
 
     print()
     print()
