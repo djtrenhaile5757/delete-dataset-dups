@@ -83,7 +83,7 @@ print("[INFO] Beginning histogram image comparison...")
 print("     Auto-Delete: " + str(auto_del))
 print()
 if not auto_del:
-    duplicates, num_dups = searcher.gather_duplicates("save")
+    num_dups = searcher.gather_duplicates("save")
 
     print()
     print()

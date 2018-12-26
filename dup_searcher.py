@@ -14,7 +14,7 @@ class DuplicateSearcher:
         self.duplicates = list()
         self.errors = list()
 
-    def gather_duplicates(self, action, save_del=False, i=1):
+    def gather_duplicates(self, action, save_del=False):
         if save_del:
             i = 1
             for dup in self.duplicates:
@@ -23,12 +23,12 @@ class DuplicateSearcher:
 
         else:
             # right now, cannot walk save directory to check for discarded possible dups
+            q_i = 1
             for query_top, query_subdirs, _ in os.walk(self.top_dir):
                 for q_subdir in query_subdirs:
                     q_path = os.path.join(query_top, q_subdir)
                     for _, _, q_images in os.walk(q_path):
                         for query in q_images:
-                            q_i = 1
                             del_i = 1
                             # get query image from a subdirectory of the top level
                             if not self.is_error_image(q_subdir + "/" + query):
@@ -38,11 +38,11 @@ class DuplicateSearcher:
                                 q = os.path.join(q_path, query)
                                 q_im = cv2.imread(q)
                                 err, q_features = self.get_features(q_im, query_top, q_subdir, query)
-                                dup_query = self.check_dup_query(q_subdir + "/" + query)
+                                dup_query = self.check_dup_query(q)
 
                                 # ** checks that the image query did not error out or
                                 # was a second iteration of a previously identified duplicate
-                                if not err or dup_query:
+                                if not err and not dup_query:
                                     for relevant_top, relevant_subdirs, _ in os.walk(self.top_dir):
                                         for r_subdir in relevant_subdirs:
                                             r_path = os.path.join(relevant_top, r_subdir)
@@ -53,7 +53,8 @@ class DuplicateSearcher:
 
                                                     # same error assertion, plus a check that the relevant image
                                                     # is not another iteration of the query
-                                                    if not self.is_error_image(r_subdir + "/" + relevant) or not q == r:
+                                                    if not self.is_error_image(r_subdir + "/" + relevant) and \
+                                                            not q == r:
                                                         r_im = cv2.imread(r)
                                                         err, r_features = self.get_features(r_im, relevant_top,
                                                                                             r_subdir, relevant)
@@ -62,12 +63,11 @@ class DuplicateSearcher:
                                                             d = dists.chi2_distance(r_features, q_features)
                                                             if d <= self.distance:
                                                                 # relevant image is too similar too the query
-                                                                print("     DUPLICATE: " + str(d) + "  ################"
-                                                                                                    "######")
+                                                                print("     DUPLICATE: " + str(d) + "  " + relevant)
                                                                 if action == "save":
                                                                     # save the duplicate
-                                                                    self.save_duplicate(q_im, query, r_im, r_subdir,
-                                                                                        relevant)
+                                                                    self.save_duplicate(q_im, query, r_im,
+                                                                                        r_subdir, relevant)
 
                                                                 elif action == "delete":
                                                                     # auto-delete is active, so anything that could
@@ -81,15 +81,17 @@ class DuplicateSearcher:
 
     def get_features(self, im, top, subdir, name):
         try:
-            return False, self.desc.describe(im)
+            features = self.desc.describe(im)
+            return False, features
         except cv2.error as e:
             print(e)
             print("[INFO] Error on query image: " + subdir + "/" + name)
             print("     adding to error photos in save directory")
+            print()
 
             path = os.path.join(top, subdir)
             self.save_error(im, name, path)
-            return True, _
+            return True, 0
 
     def save_duplicate(self, q_im, q_name, r_im, r_subdir, r_name):
         new_dir, _ = os.path.splitext(os.path.join(self.save_dir, q_name))
@@ -101,7 +103,9 @@ class DuplicateSearcher:
             os.makedirs(dup_dir)
         # write the relevant image to duplicates
         cv2.imwrite(dup_dir + "/" + r_name, r_im)
-        self.duplicates.append(r_subdir + "/" + r_name)
+
+        path = os.path.join(self.top_dir, r_subdir, r_name)
+        self.duplicates.append(path)
 
     def check_dup_query(self, q):
         for dup in self.duplicates:
@@ -118,16 +122,16 @@ class DuplicateSearcher:
         return False
 
     def save_error(self, im, name, path):
-        err_dir = self.save_dir + "/errors"
-        if os.path.isdir(err_dir):
+        subdir = os.path.basename(path)
+        err_dir = self.save_dir + "/errors/"
+        if not os.path.isdir(err_dir):
+            err_dir += subdir
             os.makedirs(err_dir)
 
-        file_path = os.path.join(err_dir, name)
-        # print("     file_path: " + file_path)
-        cv2.imwrite(file_path, im)
-        os.remove(os.path.join(path, name))
+        file = os.path.join(path, name)
+        os.rename(file, err_dir + "/" + name)
 
-        subdir = os.path.basename(path)
+        # subdir and path?
         self.errors.append(subdir + "/" + name)
 
     @staticmethod
