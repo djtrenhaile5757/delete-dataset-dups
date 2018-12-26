@@ -14,66 +14,57 @@ class DuplicateSearcher:
         self.duplicates = list()
         self.errors = list()
 
-    def gather_duplicates(self, action, save_del=False):
-        if save_del:
-            i = 1
-            for dup in self.duplicates:
-                self.delete_duplicate(dup, i)
-                i += 1
+    def gather_duplicates(self, action):
+        # right now, cannot walk save directory to check for discarded possible dups
+        q_i = 1
+        for query_top, query_subdirs, _ in os.walk(self.top_dir):
+            for q_subdir in query_subdirs:
+                q_path = os.path.join(query_top, q_subdir)
+                for _, _, q_images in os.walk(q_path):
+                    for query in q_images:
+                        del_i = 1
+                        # get query image from a subdirectory of the top level
+                        if not self.is_error_image(q_subdir + "/" + query):
+                            print("[INFO] Query #" + str(q_i).zfill(7) + ": " + query)
+                            q_i += 1
 
-        else:
-            # right now, cannot walk save directory to check for discarded possible dups
-            q_i = 1
-            for query_top, query_subdirs, _ in os.walk(self.top_dir):
-                for q_subdir in query_subdirs:
-                    q_path = os.path.join(query_top, q_subdir)
-                    for _, _, q_images in os.walk(q_path):
-                        for query in q_images:
-                            del_i = 1
-                            # get query image from a subdirectory of the top level
-                            if not self.is_error_image(q_subdir + "/" + query):
-                                print("[INFO] Query #" + str(q_i).zfill(7) + ": " + query)
-                                q_i += 1
+                            q = os.path.join(q_path, query)
+                            q_im = cv2.imread(q)
+                            err, q_features = self.get_features(q_im, query_top, q_subdir, query)
+                            dup_query = self.check_dup_query(q)
 
-                                q = os.path.join(q_path, query)
-                                q_im = cv2.imread(q)
-                                err, q_features = self.get_features(q_im, query_top, q_subdir, query)
-                                dup_query = self.check_dup_query(q)
+                            # ** checks that the image query did not error out or
+                            # was a second iteration of a previously identified duplicate
+                            if not err and not dup_query:
+                                for relevant_top, relevant_subdirs, _ in os.walk(self.top_dir):
+                                    for r_subdir in relevant_subdirs:
+                                        r_path = os.path.join(relevant_top, r_subdir)
+                                        for _, _, r_images in os.walk(r_path):
+                                            for relevant in r_images:
+                                                # get a new comparison image
+                                                r = os.path.join(r_path, relevant)
 
-                                # ** checks that the image query did not error out or
-                                # was a second iteration of a previously identified duplicate
-                                if not err and not dup_query:
-                                    for relevant_top, relevant_subdirs, _ in os.walk(self.top_dir):
-                                        for r_subdir in relevant_subdirs:
-                                            r_path = os.path.join(relevant_top, r_subdir)
-                                            for _, _, r_images in os.walk(r_path):
-                                                for relevant in r_images:
-                                                    # get a new comparison image
-                                                    r = os.path.join(r_path, relevant)
-
-                                                    # same error assertion, plus a check that the relevant image
-                                                    # is not another iteration of the query
-                                                    if not self.is_error_image(r_subdir + "/" + relevant) and \
-                                                            not q == r:
-                                                        r_im = cv2.imread(r)
-                                                        err, r_features = self.get_features(r_im, relevant_top,
-                                                                                            r_subdir, relevant)
-
-                                                        if not err:
-                                                            d = dists.chi2_distance(r_features, q_features)
-                                                            if d <= self.distance:
-                                                                # relevant image is too similar too the query
-                                                                print("     DUPLICATE: " + str(d) + "  " + relevant)
-                                                                if action == "save":
-                                                                    # save the duplicate
-                                                                    self.save_duplicate(q_im, query, r_im,
+                                                # same error assertion, plus a check that the relevant image
+                                                # is not another iteration of the query
+                                                if not self.is_error_image(r_subdir + "/" + relevant) and \
+                                                        not q == r:
+                                                    r_im = cv2.imread(r)
+                                                    err, r_features = self.get_features(r_im, relevant_top,
                                                                                         r_subdir, relevant)
-
-                                                                elif action == "delete":
-                                                                    # auto-delete is active, so anything that could
-                                                                    # be a duplicate can be safely deleted
-                                                                    self.delete_duplicate(r, del_i)
-                                                                    del_i += 1
+                                                    if not err:
+                                                        d = dists.chi2_distance(r_features, q_features)
+                                                        if d <= self.distance:
+                                                            # relevant image is too similar too the query
+                                                            print("     DUPLICATE: " + str(d) + "  " + relevant)
+                                                            if action == "save":
+                                                                # save the duplicate
+                                                                self.save_duplicate(q_im, query, r_im,
+                                                                                    r_subdir, relevant)
+                                                            elif action == "delete":
+                                                                # auto-delete is active, so anything that could
+                                                                # be a duplicate can be safely deleted
+                                                                self.delete_duplicate(r, del_i)
+                                                                del_i += 1
             num_dups = 0
             for dup in self.duplicates:
                 num_dups += 1
@@ -133,6 +124,28 @@ class DuplicateSearcher:
 
         # subdir and path?
         self.errors.append(subdir + "/" + name)
+
+    def delete_all_duplicates(self, i=1):
+        for save_name, save_dirs, _ in os.walk(self.save_dir):
+            for save_dir in save_dirs:
+                if not save_dir == "error":
+                    path = os.path.join(save_name, save_dir)
+                    for sub_savename, sub_savedirs, _ in os.walk(path):
+                        for sub_savedir in sub_savedirs:
+                            if sub_savedir == "duplicates":
+                                path = os.path.join(sub_savename, sub_savedir)
+                                for _, _, dups in os.walk(path):
+                                    for dup in dups:
+
+                                        for top_name, top_dirs, _ in os.walk(self.top_dir):
+                                            for top_dir in top_dirs:
+                                                path = os.path.join(top_name, top_dir)
+                                                for top_sub, _, top_files in os.walk(path):
+                                                    for top_file in top_files:
+                                                        if top_file == dup:
+                                                            path = os.path.join(path, top_file)
+                                                            os.remove(path)
+                                                            print("[INFO] DELETED " + str(i).zfill(4))
 
     @staticmethod
     def delete_duplicate(r, i):

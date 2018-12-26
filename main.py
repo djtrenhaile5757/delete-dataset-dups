@@ -99,7 +99,7 @@ if not auto_del:
         input("Continue? [enter]")
     except SyntaxError:
         pass
-    searcher.gather_duplicates("save", save_del=True)
+    searcher.delete_all_duplicates()
 
 else:
     searcher.gather_duplicates("delete")
